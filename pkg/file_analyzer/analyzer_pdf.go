@@ -1,22 +1,24 @@
 package file_analyzer
 
 import (
+	"bytes"
 	"fmt"
-	"github.com/unidoc/unipdf/v3/extractor"
-	"github.com/unidoc/unipdf/v3/model"
+	"io"
 	"mime/multipart"
 	"read_files/structs"
 	"read_files/util"
 	"read_files/util/constants"
 	"strings"
+
+	"github.com/ledongthuc/pdf"
 )
 
-func containsAllKeywordsPdf(line string, keywords []string) bool {
-	line = strings.ToUpper(line)
+func containsAllKeywords(text string, keywords []string) bool {
+	textUpper := strings.ToUpper(text)
 
 	for _, keyword := range keywords {
 		upperKeyword := strings.ToUpper(keyword)
-		if !strings.Contains(line, upperKeyword) {
+		if !strings.Contains(textUpper, upperKeyword) {
 			return false
 		}
 	}
@@ -25,42 +27,40 @@ func containsAllKeywordsPdf(line string, keywords []string) bool {
 }
 
 func SearchKeywordsInPdfFiles(file multipart.File, filename string, keywords []string, results chan<- structs.FileReader) error {
-	pdfReader, err := model.NewPdfReader(file)
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
 	if err != nil {
-		util.CustomLogger(constants.Error, fmt.Sprintf("NewPdfReader: %v", err))
-		return fmt.Errorf("NewPdfReader: %v", err)
+		util.CustomLogger(constants.Error, fmt.Sprintf("io.ReadAll: %v", err))
+		return fmt.Errorf("io.ReadAll: %v", err)
 	}
 
-	numPages, err := pdfReader.GetNumPages()
+	readerAt := bytes.NewReader(data)
+	pdfReader, err := pdf.NewReader(readerAt, int64(len(data)))
 	if err != nil {
-		util.CustomLogger(constants.Error, fmt.Sprintf("GetNumPages: %v", err))
-		return fmt.Errorf("GetNumPages: %v", err)
+		util.CustomLogger(constants.Error, fmt.Sprintf("NewReader: %v", err))
+		return fmt.Errorf("NewReader: %v", err)
 	}
 
-	var found bool
-	for i := 1; i <= numPages && !found; i++ {
-		page, err := pdfReader.GetPage(i)
-		if err != nil {
-			util.CustomLogger(constants.Error, fmt.Sprintf("GetPage: %v", err))
-			return fmt.Errorf("GetPage: %v", err)
+	numPages := pdfReader.NumPage()
+
+	for pageIndex := 1; pageIndex <= numPages; pageIndex++ {
+		page := pdfReader.Page(pageIndex)
+		if page.V.IsNull() {
+			continue
 		}
 
-		ex, err := extractor.New(page)
+		text, err := page.GetPlainText(nil)
 		if err != nil {
-			util.CustomLogger(constants.Error, fmt.Sprintf("extractor.New: %v", err))
-			return fmt.Errorf("Extractor.New: %v", err)
+			util.CustomLogger(constants.Error, fmt.Sprintf("GetPlainText page %d: %v", pageIndex, err))
+			continue
 		}
 
-		text, err := ex.ExtractText()
-		if err != nil {
-			util.CustomLogger(constants.Error, fmt.Sprintf("ExtractText: %v", err))
-			return fmt.Errorf("ex.ExtractText: %v", err)
-		}
-
-		if containsAllKeywordsPdf(text, keywords) {
-			found = true
-			results <- structs.FileReader{Filename: filename, Reader: file}
+		if containsAllKeywords(text, keywords) {
+			results <- structs.FileReader{Filename: filename, Reader: bytes.NewBuffer(data)}
+			break
 		}
 	}
+
 	return nil
 }

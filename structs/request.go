@@ -17,10 +17,10 @@ func (r *RequestForm) Validate() error {
 	var errMessages []string
 
 	if len(r.Files) == 0 {
-		errMessages = append(errMessages, "envie os arquivos para análise")
+		errMessages = append(errMessages, "envie arquivos para análise")
 	}
 	if len(r.Keywords) == 0 {
-		errMessages = append(errMessages, "envie as palavras-chave")
+		errMessages = append(errMessages, "envie palavras-chave")
 	}
 
 	if len(errMessages) > 0 {

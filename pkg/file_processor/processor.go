@@ -8,6 +8,7 @@ import (
 	"read_files/structs"
 	"read_files/util"
 	"read_files/util/constants"
+	"runtime"
 	"strings"
 	"sync"
 )
@@ -24,7 +25,7 @@ func ProcessorFilesAll(request structs.RequestForm) ([]structs.FileReader, error
 
 	var wg sync.WaitGroup
 
-	numWorkers := 4
+	numWorkers := runtime.GOMAXPROCS(0)
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
 		go func() {
@@ -33,8 +34,10 @@ func ProcessorFilesAll(request structs.RequestForm) ([]structs.FileReader, error
 		}()
 	}
 
-	wg.Wait()
-	close(results)
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
 
 	var matchedFiles []structs.FileReader
 	for file := range results {
@@ -55,6 +58,7 @@ func openFilesForAnalysis(fileChannel <-chan *multipart.FileHeader, keywords []s
 			errChan <- fmt.Errorf("error opening file: %v", err)
 			return
 		}
+		defer file.Close()
 
 		extension := strings.ToLower(filepath.Ext(fileHeader.Filename))
 		var processErr error
@@ -64,10 +68,8 @@ func openFilesForAnalysis(fileChannel <-chan *multipart.FileHeader, keywords []s
 			processErr = file_analyzer.SearchKeywordsInTextFiles(file, fileHeader.Filename, keywords, results)
 		}
 
-		file.Close()
-
 		if processErr != nil {
-			util.CustomLogger(constants.Error, fmt.Sprintf("error processing file: %v", err))
+			util.CustomLogger(constants.Error, fmt.Sprintf("error processing file: %v", processErr))
 			errChan <- fmt.Errorf("error processing file: %v", processErr)
 			return
 		}
