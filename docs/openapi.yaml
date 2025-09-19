@@ -1,0 +1,105 @@
+openapi: 3.0.3
+info:
+  title: Filter Files API
+  version: "1.0.0"
+  description: |
+    API para buscar palavras-chave em arquivos e retornar apenas os arquivos que deram match, compactados em um ZIP.
+paths:
+  /api/v1/health:
+    get:
+      tags:
+        - Health
+      summary: Verifica a saúde da aplicação
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Serviço disponível
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: ok
+        "500":
+          description: Erro interno
+          content:
+            text/plain:
+              schema:
+                type: string
+  /api/v1/upload:
+    post:
+      tags:
+        - Upload
+      summary: Faz upload de arquivos e busca por palavras-chave
+      operationId: uploadFiles
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - documents
+                - keywords
+              properties:
+                documents:
+                  type: array
+                  description: Arquivos a serem analisados (.txt, .pdf, .doc, .docx)
+                  items:
+                    type: string
+                    format: binary
+                keywords:
+                  type: string
+                  description: "Palavras-chave separadas por espaço (ex.: golang concorrência pdf )"
+            encoding:
+              documents:
+                style: form
+                explode: true
+      responses:
+        "200":
+          description: Arquivo ZIP contendo apenas os arquivos que deram match
+          headers:
+            Content-Disposition:
+              description: Sugestão de nome do arquivo ZIP
+              schema:
+                type: string
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Requisição inválida (faltando arquivos/palavras-chave ou extensão não permitida)
+          content:
+            text/plain:
+              schema:
+                type: string
+              examples:
+                semArquivos:
+                  value: "envie arquivos para análise"
+                semPalavras:
+                  value: "envie palavras-chave"
+                extensaoNaoPermitida:
+                  value: "extensão de arquivo não permitida: .xyz no arquivo exemplo.xyz"
+        "404":
+          description: Palavras-chave não encontradas em nenhum arquivo
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: "Palavras-chave não encontradas"
+        "500":
+          description: Erro ao processar arquivos ou criar ZIP
+          content:
+            text/plain:
+              schema:
+                type: string
+              examples:
+                processamento:
+                  value: "Error ao processar arquivos"
+                zip:
+                  value: "Error ao criar arquivo zip"
+tags:
+  - name: Health
+    description: Verificação de disponibilidade
+  - name: Upload
+    description: Envio e processamento de arquivos

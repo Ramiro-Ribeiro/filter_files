@@ -1,28 +1,16 @@
-FROM golang:1.25-alpine as builder
+FROM nginx:alpine
 
-LABEL authors="Ramiro"
+COPY nginx.conf /etc/nginx/nginx.conf
 
 WORKDIR /app
 
-COPY go.mod go.sum ./
-RUN go mod download
+COPY myapp /app/myapp
 
-COPY . .
+RUN chmod +x /app/myapp
 
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o myapp .
+EXPOSE 80
 
-FROM alpine:latest
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-RUN apk --no-cache add ca-certificates
-
-WORKDIR /root/
-
-COPY --from=builder /app/myapp .
-
-VOLUME /path/to/volume
-
-EXPOSE 3000
-
-CMD ["./myapp"]
-
-
+ENTRYPOINT ["/entrypoint.sh"]
